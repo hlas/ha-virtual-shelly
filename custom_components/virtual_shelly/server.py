@@ -243,7 +243,7 @@ class ShellyRpcServer:
                     "rpc_method": rpc_method,
                 }
             )
-        _LOGGER.info(
+        _LOGGER.debug(
             "Shelly request from %s: %s %s (RPC method: %s)",
             remote,
             request.method,

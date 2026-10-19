@@ -48,6 +48,6 @@ The device also advertises `_shelly._tcp.local.` and `_http._tcp.local.` over mD
 
 ## Pairing diagnostics
 
-Every incoming Shelly HTTP/RPC request is recorded at info level in the Home Assistant log under `custom_components.virtual_shelly.server`. Request bodies are deliberately excluded so passwords and other parameters are not logged. Unsupported RPC methods are logged as warnings, which makes it possible to identify compatibility gaps during pairing.
+Every incoming Shelly HTTP/RPC request is recorded at debug level in the Home Assistant log under `custom_components.virtual_shelly.server`; use **Enable debug logging** on the integration page to see them. Request bodies are deliberately excluded so passwords and other parameters are not logged. Unsupported RPC methods are logged as warnings, which makes it possible to identify compatibility gaps during pairing.
 
 For troubleshooting, enable **Request diagnostics endpoint** from the integration's **Configure** screen. While enabled, safe metadata for the most recent 200 requests is retained in memory and available at `/debug/requests` on the configured Shelly port. The response includes the running build number, excludes request bodies and parameters, and is cleared whenever the integration reloads. Keep this option disabled during normal use because the endpoint is accessible to other devices on the local network.
