@@ -63,7 +63,10 @@ def _schema(settings: dict[str, Any], addresses: list[str]) -> vol.Schema:
         ): selector.SelectSelector(
             selector.SelectSelectorConfig(
                 options=[
-                    *addresses,
+                    *(
+                        selector.SelectOptionDict(value=address, label=address)
+                        for address in addresses
+                    ),
                     selector.SelectOptionDict(
                         value=ALL_ADDRESSES, label="0.0.0.0 (all addresses)"
                     ),
