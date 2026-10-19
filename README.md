@@ -20,7 +20,7 @@ The integration source is in `custom_components/virtual_shelly`. The development
 ## Install with HACS
 
 1. In HACS, open the three-dot menu and select **Custom repositories**.
-2. Add `https://github.com/hlas/ha-virtual-shelly` as an **Integration**.
+2. Add `https://github.com/thomaspleasance/ha-virtual-shelly` as an **Integration**.
 3. Download **Virtual Shelly** and restart Home Assistant.
 4. Open **Settings → Devices & services → Add integration** and select **Virtual Shelly**.
 5. Keep HTTP port `80` for mySigen/Sigenergy compatibility and optionally select Home Assistant power and cumulative energy sensors for each channel. The **Listen IP address** defaults to Home Assistant's primary IPv4; pick a specific address if another service needs port 80 on a different IP, or `0.0.0.0` to listen on all addresses.
