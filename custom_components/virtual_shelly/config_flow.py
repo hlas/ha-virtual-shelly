@@ -17,14 +17,16 @@ from .const import (
     CONF_ENABLE_DIAGNOSTICS,
     CONF_ENERGY_ENTITIES,
     CONF_HOST,
+    CONF_MAC,
     CONF_NAME,
     CONF_PORT,
     CONF_POWER_ENTITIES,
     DEFAULT_NAME,
-    DEVICE_ID,
     DOMAIN,
+    LEGACY_MAC,
 )
-from .helpers import async_get_ipv4_addresses
+from .device import device_id_for_mac, next_mac
+from .helpers import async_get_default_host, async_get_ipv4_addresses
 
 UI_DEFAULT_PORT = 80
 
@@ -109,6 +111,30 @@ def _schema(settings: dict[str, Any], addresses: list[str]) -> vol.Schema:
     return vol.Schema(fields)
 
 
+async def _async_used_endpoints(
+    hass, exclude_entry_id: str | None
+) -> list[tuple[str, int]]:
+    """Return (host, port) endpoints already used by other config entries."""
+    endpoints = []
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        if entry.entry_id == exclude_entry_id:
+            continue
+        settings = {**entry.data, **entry.options}
+        host = settings.get(CONF_HOST) or await async_get_default_host(hass)
+        if host is None:
+            continue
+        endpoints.append((host, settings[CONF_PORT]))
+    return endpoints
+
+
+def _endpoint_conflicts(host: str, port: int, used: list[tuple[str, int]]) -> bool:
+    """Return True if (host, port) overlaps an endpoint already in use."""
+    return any(
+        port == used_port and (host == used_host or ALL_ADDRESSES in (host, used_host))
+        for used_host, used_port in used
+    )
+
+
 def _settings_from_form(user_input: dict[str, Any]) -> dict[str, Any]:
     """Convert flat UI fields to runtime settings."""
     return {
@@ -146,6 +172,7 @@ def _settings_from_import(data: dict[str, Any]) -> dict[str, Any]:
     }
     if CONF_HOST in data:
         settings[CONF_HOST] = data[CONF_HOST]
+    settings[CONF_MAC] = data.get(CONF_MAC, LEGACY_MAC)
     return settings
 
 
@@ -153,27 +180,59 @@ class VirtualShellyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a Virtual Shelly config flow."""
 
     VERSION = 1
+    MINOR_VERSION = 2
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Create the single virtual Pro 4PM."""
-        await self.async_set_unique_id(DEVICE_ID)
-        self._abort_if_unique_id_configured()
+        """Create a virtual Pro 4PM."""
+        existing = self._async_current_entries(include_ignore=False)
         addresses = await async_get_ipv4_addresses(self.hass)
+        used = await _async_used_endpoints(self.hass, None)
         errors: dict[str, str] = {}
         if user_input is not None:
-            if _valid_ipv4(user_input.get(CONF_HOST)):
+            if not _valid_ipv4(user_input.get(CONF_HOST)):
+                errors[CONF_HOST] = "invalid_host"
+            elif _endpoint_conflicts(
+                user_input[CONF_HOST], user_input[CONF_PORT], used
+            ):
+                errors[CONF_HOST] = "address_in_use"
+            else:
                 settings = _settings_from_form(user_input)
-                return self.async_create_entry(
-                    title=settings[CONF_NAME], data=settings
+                mac = next_mac(
+                    entry.data.get(CONF_MAC, LEGACY_MAC) for entry in existing
                 )
-            errors[CONF_HOST] = "invalid_host"
+                await self.async_set_unique_id(device_id_for_mac(mac))
+                self._abort_if_unique_id_configured()
+                return self.async_create_entry(
+                    title=settings[CONF_NAME],
+                    data={**settings, CONF_MAC: mac},
+                )
+        if user_input:
+            form_settings = _settings_from_form(user_input)
+        else:
+            used_hosts = {host for host, _ in used}
+            suggested_host = next(
+                (
+                    address
+                    for address in addresses
+                    if address not in used_hosts
+                    and ALL_ADDRESSES not in used_hosts
+                ),
+                addresses[0] if addresses else ALL_ADDRESSES,
+            )
+            suggested_name = (
+                DEFAULT_NAME
+                if not existing
+                else f"{DEFAULT_NAME} {len(existing) + 1}"
+            )
+            form_settings = {
+                CONF_NAME: suggested_name,
+                CONF_HOST: suggested_host,
+            }
         return self.async_show_form(
             step_id="user",
-            data_schema=_schema(
-                _settings_from_form(user_input) if user_input else {}, addresses
-            ),
+            data_schema=_schema(form_settings, addresses),
             errors=errors,
         )
 
@@ -182,7 +241,7 @@ class VirtualShellyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> config_entries.ConfigFlowResult:
         """Import the existing YAML configuration."""
         settings = _settings_from_import(user_input)
-        await self.async_set_unique_id(DEVICE_ID)
+        await self.async_set_unique_id(device_id_for_mac(LEGACY_MAC))
         self._abort_if_unique_id_configured(updates=settings)
         return self.async_create_entry(title=settings[CONF_NAME], data=settings)
 
@@ -204,9 +263,20 @@ class VirtualShellyOptionsFlow(config_entries.OptionsFlowWithReload):
         """Show editable device and channel settings."""
         errors: dict[str, str] = {}
         if user_input is not None:
-            if _valid_ipv4(user_input.get(CONF_HOST)):
-                return self.async_create_entry(data=_settings_from_form(user_input))
-            errors[CONF_HOST] = "invalid_host"
+            if not _valid_ipv4(user_input.get(CONF_HOST)):
+                errors[CONF_HOST] = "invalid_host"
+            else:
+                used = await _async_used_endpoints(
+                    self.hass, self.config_entry.entry_id
+                )
+                if _endpoint_conflicts(
+                    user_input[CONF_HOST], user_input[CONF_PORT], used
+                ):
+                    errors[CONF_HOST] = "address_in_use"
+                else:
+                    return self.async_create_entry(
+                        data=_settings_from_form(user_input)
+                    )
         settings = {**self.config_entry.data, **self.config_entry.options}
         addresses = await async_get_ipv4_addresses(self.hass)
         return self.async_show_form(

@@ -11,8 +11,6 @@ from zeroconf.asyncio import AsyncServiceInfo
 
 from .const import (
     ALL_ADDRESSES,
-    DEVICE_ID,
-    DEVICE_MAC,
     DEVICE_MODEL_ID,
     MDNS_SERVICE_TYPES,
 )
@@ -21,8 +19,12 @@ from .const import (
 class ShellyMdnsAdvertiser:
     """Publish Shelly Gen2-compatible Bonjour records."""
 
-    def __init__(self, hass: HomeAssistant, host: str, port: int) -> None:
+    def __init__(
+        self, hass: HomeAssistant, device_id: str, mac: str, host: str, port: int
+    ) -> None:
         self._hass = hass
+        self._device_id = device_id
+        self._mac = mac
         self._host = host
         self._port = port
         self._aio_zeroconf = None
@@ -44,18 +46,18 @@ class ShellyMdnsAdvertiser:
             addresses = [self._host]
         properties = {
             "gen": "2",
-            "id": DEVICE_ID,
-            "mac": DEVICE_MAC,
+            "id": self._device_id,
+            "mac": self._mac,
             "app": "FourPro",
             "model": DEVICE_MODEL_ID,
         }
-        server = f"{DEVICE_ID}.local."
+        server = f"{self._device_id}.local."
         self._aio_zeroconf = await async_get_async_instance(self._hass)
 
         for service_type in MDNS_SERVICE_TYPES:
             service = AsyncServiceInfo(
                 service_type,
-                name=f"{DEVICE_ID}.{service_type}",
+                name=f"{self._device_id}.{service_type}",
                 server=server,
                 parsed_addresses=addresses,
                 port=self._port,

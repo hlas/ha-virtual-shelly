@@ -19,12 +19,14 @@ from .const import (
     CONF_ENABLE_DIAGNOSTICS,
     CONF_ENERGY_ENTITIES,
     CONF_HOST,
+    CONF_MAC,
     CONF_NAME,
     CONF_PORT,
     CONF_POWER_ENTITIES,
     DEFAULT_NAME,
     DEFAULT_PORT,
     DOMAIN,
+    LEGACY_MAC,
 )
 from .device import VirtualShellyPro4PM
 from .helpers import async_get_default_host
@@ -145,14 +147,18 @@ async def async_setup_entry(
     if host is None:
         raise ConfigEntryNotReady("No IPv4 address available for Virtual Shelly")
 
-    device = VirtualShellyPro4PM(settings[CONF_NAME], _read_power, _read_energy)
+    device = VirtualShellyPro4PM(
+        settings[CONF_NAME], entry.data[CONF_MAC], _read_power, _read_energy
+    )
     server = ShellyRpcServer(
         device,
         host,
         settings[CONF_PORT],
         settings.get(CONF_ENABLE_DIAGNOSTICS, False),
     )
-    advertiser = ShellyMdnsAdvertiser(hass, host, settings[CONF_PORT])
+    advertiser = ShellyMdnsAdvertiser(
+        hass, device.device_id, device.mac, host, settings[CONF_PORT]
+    )
 
     try:
         await server.async_start()
@@ -170,6 +176,19 @@ async def async_setup_entry(
 
     entry.runtime_data = VirtualShellyRuntimeData(device, server, advertiser)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    return True
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Give entries created before per-instance MACs the legacy identity."""
+    if entry.version > 1:
+        return False
+    if entry.version == 1 and entry.minor_version < 2:
+        hass.config_entries.async_update_entry(
+            entry,
+            data={**entry.data, CONF_MAC: entry.data.get(CONF_MAC, LEGACY_MAC)},
+            minor_version=2,
+        )
     return True
 
 

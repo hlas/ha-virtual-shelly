@@ -9,7 +9,7 @@ from typing import Any
 
 from aiohttp import web
 
-from .const import CHANNEL_COUNT, DEVICE_ID, VERSION
+from .const import CHANNEL_COUNT, VERSION
 from .device import VirtualShellyPro4PM
 
 _LOGGER = logging.getLogger(__name__)
@@ -79,19 +79,27 @@ class ShellyRpcServer:
                 self._local_ip(request),
             )
             return web.json_response(
-                {"id": request_id, "src": DEVICE_ID, "result": result}
+                {
+                    "id": request_id,
+                    "src": self._device.device_id,
+                    "result": result,
+                }
             )
         except RpcError as err:
             return web.json_response(
                 {
                     "id": frame.get("id") if "frame" in locals() else None,
-                    "src": DEVICE_ID,
+                    "src": self._device.device_id,
                     "error": {"code": err.code, "message": err.message},
                 }
             )
         except (ValueError, TypeError, web.HTTPBadRequest) as err:
             return web.json_response(
-                {"id": None, "src": DEVICE_ID, "error": {"code": -103, "message": str(err)}}
+                {
+                    "id": None,
+                    "src": self._device.device_id,
+                    "error": {"code": -103, "message": str(err)},
+                }
             )
 
     async def _handle_method(self, request: web.Request) -> web.Response:
@@ -148,7 +156,7 @@ class ShellyRpcServer:
         if method in {"WiFi.GetConfig", "Wifi.GetConfig"}:
             return {
                 "ap": {
-                    "ssid": DEVICE_ID,
+                    "ssid": self._device.device_id,
                     "is_open": True,
                     "enable": False,
                 },
