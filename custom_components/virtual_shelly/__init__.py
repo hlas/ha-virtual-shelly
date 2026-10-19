@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from ipaddress import ip_address
 
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 
@@ -16,6 +18,7 @@ from .const import (
     CHANNEL_COUNT,
     CONF_ENABLE_DIAGNOSTICS,
     CONF_ENERGY_ENTITIES,
+    CONF_HOST,
     CONF_NAME,
     CONF_PORT,
     CONF_POWER_ENTITIES,
@@ -24,15 +27,28 @@ from .const import (
     DOMAIN,
 )
 from .device import VirtualShellyPro4PM
+from .helpers import async_get_default_host
 from .mdns import ShellyMdnsAdvertiser
 from .server import ShellyRpcServer
 
 PLATFORMS = [Platform.SWITCH]
 
+
+def _ipv4_address(value: str) -> str:
+    """Validate that the value is an IPv4 address."""
+    try:
+        if ip_address(value).version != 4:
+            raise ValueError("not an IPv4 address")
+    except ValueError as err:
+        raise vol.Invalid("not a valid IPv4 address") from err
+    return value
+
+
 CONFIG_SCHEMA = vol.Schema(
     {
         DOMAIN: vol.Schema(
             {
+                vol.Optional(CONF_HOST): vol.All(cv.string, _ipv4_address),
                 vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
                 vol.Optional(CONF_PORT, default=DEFAULT_PORT): cv.port,
                 vol.Optional(CONF_ENABLE_DIAGNOSTICS, default=False): cv.boolean,
@@ -125,17 +141,28 @@ async def async_setup_entry(
         unit = state.attributes.get("unit_of_measurement")
         return round(value * multipliers.get(unit, 1.0), 3)
 
+    host = settings.get(CONF_HOST) or await async_get_default_host(hass)
+    if host is None:
+        raise ConfigEntryNotReady("No IPv4 address available for Virtual Shelly")
+
     device = VirtualShellyPro4PM(settings[CONF_NAME], _read_power, _read_energy)
     server = ShellyRpcServer(
         device,
+        host,
         settings[CONF_PORT],
         settings.get(CONF_ENABLE_DIAGNOSTICS, False),
     )
-    advertiser = ShellyMdnsAdvertiser(hass, settings[CONF_PORT])
+    advertiser = ShellyMdnsAdvertiser(hass, host, settings[CONF_PORT])
 
     try:
         await server.async_start()
         await advertiser.async_start()
+    except OSError as err:
+        await advertiser.async_stop()
+        await server.async_stop()
+        raise ConfigEntryNotReady(
+            f"Cannot listen on {host}:{settings[CONF_PORT]}: {err}"
+        ) from err
     except Exception:
         await advertiser.async_stop()
         await server.async_stop()

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from ipaddress import ip_address
 from typing import Any
 
 import voluptuous as vol
@@ -11,9 +12,11 @@ from homeassistant.core import callback
 from homeassistant.helpers import config_validation as cv, selector
 
 from .const import (
+    ALL_ADDRESSES,
     CHANNEL_COUNT,
     CONF_ENABLE_DIAGNOSTICS,
     CONF_ENERGY_ENTITIES,
+    CONF_HOST,
     CONF_NAME,
     CONF_PORT,
     CONF_POWER_ENTITIES,
@@ -21,6 +24,7 @@ from .const import (
     DEVICE_ID,
     DOMAIN,
 )
+from .helpers import async_get_ipv4_addresses
 
 UI_DEFAULT_PORT = 80
 
@@ -33,7 +37,15 @@ def _energy_key(channel: int) -> str:
     return f"energy_entity_{channel}"
 
 
-def _schema(settings: dict[str, Any]) -> vol.Schema:
+def _valid_ipv4(value: Any) -> bool:
+    """Return True if the value is an IPv4 address."""
+    try:
+        return ip_address(value).version == 4
+    except ValueError:
+        return False
+
+
+def _schema(settings: dict[str, Any], addresses: list[str]) -> vol.Schema:
     """Build the user/options form schema."""
     power_entities = settings.get(CONF_POWER_ENTITIES, {})
     energy_entities = settings.get(CONF_ENERGY_ENTITIES, {})
@@ -42,6 +54,24 @@ def _schema(settings: dict[str, Any]) -> vol.Schema:
             CONF_NAME,
             description={"suggested_value": settings.get(CONF_NAME, DEFAULT_NAME)},
         ): str,
+        vol.Required(
+            CONF_HOST,
+            description={
+                "suggested_value": settings.get(CONF_HOST)
+                or (addresses[0] if addresses else ALL_ADDRESSES)
+            },
+        ): selector.SelectSelector(
+            selector.SelectSelectorConfig(
+                options=[
+                    *addresses,
+                    selector.SelectOptionDict(
+                        value=ALL_ADDRESSES, label="0.0.0.0 (all addresses)"
+                    ),
+                ],
+                custom_value=True,
+                mode=selector.SelectSelectorMode.DROPDOWN,
+            )
+        ),
         vol.Required(
             CONF_PORT,
             description={"suggested_value": settings.get(CONF_PORT, UI_DEFAULT_PORT)},
@@ -80,6 +110,7 @@ def _settings_from_form(user_input: dict[str, Any]) -> dict[str, Any]:
     """Convert flat UI fields to runtime settings."""
     return {
         CONF_NAME: user_input[CONF_NAME],
+        CONF_HOST: user_input[CONF_HOST],
         CONF_PORT: user_input[CONF_PORT],
         CONF_ENABLE_DIAGNOSTICS: user_input[CONF_ENABLE_DIAGNOSTICS],
         CONF_POWER_ENTITIES: {
@@ -97,7 +128,7 @@ def _settings_from_form(user_input: dict[str, Any]) -> dict[str, Any]:
 
 def _settings_from_import(data: dict[str, Any]) -> dict[str, Any]:
     """Normalize legacy YAML settings."""
-    return {
+    settings = {
         CONF_NAME: data.get(CONF_NAME, DEFAULT_NAME),
         CONF_PORT: data.get(CONF_PORT, UI_DEFAULT_PORT),
         CONF_ENABLE_DIAGNOSTICS: data.get(CONF_ENABLE_DIAGNOSTICS, False),
@@ -110,6 +141,9 @@ def _settings_from_import(data: dict[str, Any]) -> dict[str, Any]:
             for channel, entity_id in data.get(CONF_ENERGY_ENTITIES, {}).items()
         },
     }
+    if CONF_HOST in data:
+        settings[CONF_HOST] = data[CONF_HOST]
+    return settings
 
 
 class VirtualShellyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -123,10 +157,22 @@ class VirtualShellyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Create the single virtual Pro 4PM."""
         await self.async_set_unique_id(DEVICE_ID)
         self._abort_if_unique_id_configured()
+        addresses = await async_get_ipv4_addresses(self.hass)
+        errors: dict[str, str] = {}
         if user_input is not None:
-            settings = _settings_from_form(user_input)
-            return self.async_create_entry(title=settings[CONF_NAME], data=settings)
-        return self.async_show_form(step_id="user", data_schema=_schema({}))
+            if _valid_ipv4(user_input.get(CONF_HOST)):
+                settings = _settings_from_form(user_input)
+                return self.async_create_entry(
+                    title=settings[CONF_NAME], data=settings
+                )
+            errors[CONF_HOST] = "invalid_host"
+        return self.async_show_form(
+            step_id="user",
+            data_schema=_schema(
+                _settings_from_form(user_input) if user_input else {}, addresses
+            ),
+            errors=errors,
+        )
 
     async def async_step_import(
         self, user_input: dict[str, Any]
@@ -153,7 +199,18 @@ class VirtualShellyOptionsFlow(config_entries.OptionsFlowWithReload):
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
         """Show editable device and channel settings."""
+        errors: dict[str, str] = {}
         if user_input is not None:
-            return self.async_create_entry(data=_settings_from_form(user_input))
+            if _valid_ipv4(user_input.get(CONF_HOST)):
+                return self.async_create_entry(data=_settings_from_form(user_input))
+            errors[CONF_HOST] = "invalid_host"
         settings = {**self.config_entry.data, **self.config_entry.options}
-        return self.async_show_form(step_id="init", data_schema=_schema(settings))
+        addresses = await async_get_ipv4_addresses(self.hass)
+        return self.async_show_form(
+            step_id="init",
+            data_schema=_schema(
+                _settings_from_form(user_input) if user_input else settings,
+                addresses,
+            ),
+            errors=errors,
+        )

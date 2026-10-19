@@ -28,9 +28,14 @@ class ShellyRpcServer:
     """Serve the subset of Shelly RPC needed for four relay channels."""
 
     def __init__(
-        self, device: VirtualShellyPro4PM, port: int, diagnostics_enabled: bool = False
+        self,
+        device: VirtualShellyPro4PM,
+        host: str,
+        port: int,
+        diagnostics_enabled: bool = False,
     ) -> None:
         self._device = device
+        self._host = host
         self._port = port
         self._diagnostics_enabled = diagnostics_enabled
         self._runner: web.AppRunner | None = None
@@ -47,7 +52,7 @@ class ShellyRpcServer:
         app.router.add_post("/rpc/{method}", self._handle_method)
         self._runner = web.AppRunner(app)
         await self._runner.setup()
-        await web.TCPSite(self._runner, "0.0.0.0", self._port).start()
+        await web.TCPSite(self._runner, self._host, self._port).start()
 
     async def async_stop(self) -> None:
         """Stop the HTTP server."""

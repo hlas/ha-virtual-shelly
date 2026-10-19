@@ -7,6 +7,7 @@
         "description": "Configure the Shelly-compatible server and optionally map Home Assistant power sensors to its four channels.",
         "data": {
           "name": "Device name",
+          "host": "Listen IP address",
           "port": "HTTP port",
           "enable_diagnostics": "Enable request diagnostics endpoint",
           "power_entity_1": "Channel 1 power sensor",
@@ -17,8 +18,14 @@
           "energy_entity_3": "Channel 3 total energy sensor",
           "power_entity_4": "Channel 4 power sensor",
           "energy_entity_4": "Channel 4 total energy sensor"
+        },
+        "data_description": {
+          "host": "IPv4 address the Shelly API listens on and advertises over mDNS. Use 0.0.0.0 to listen on all addresses."
         }
       }
+    },
+    "error": {
+      "invalid_host": "Enter a valid IPv4 address."
     },
     "abort": {
       "already_configured": "Virtual Shelly is already configured."
@@ -30,6 +37,7 @@
         "title": "Configure Virtual Shelly Pro 4PM",
         "data": {
           "name": "Device name",
+          "host": "Listen IP address",
           "port": "HTTP port",
           "enable_diagnostics": "Enable request diagnostics endpoint",
           "power_entity_1": "Channel 1 power sensor",
@@ -40,8 +48,14 @@
           "energy_entity_3": "Channel 3 total energy sensor",
           "power_entity_4": "Channel 4 power sensor",
           "energy_entity_4": "Channel 4 total energy sensor"
+        },
+        "data_description": {
+          "host": "IPv4 address the Shelly API listens on and advertises over mDNS. Use 0.0.0.0 to listen on all addresses."
         }
       }
+    },
+    "error": {
+      "invalid_host": "Enter a valid IPv4 address."
     }
   }
 }

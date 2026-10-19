@@ -10,6 +10,7 @@ from homeassistant.core import HomeAssistant
 from zeroconf.asyncio import AsyncServiceInfo
 
 from .const import (
+    ALL_ADDRESSES,
     DEVICE_ID,
     DEVICE_MAC,
     DEVICE_MODEL_ID,
@@ -20,21 +21,27 @@ from .const import (
 class ShellyMdnsAdvertiser:
     """Publish Shelly Gen2-compatible Bonjour records."""
 
-    def __init__(self, hass: HomeAssistant, port: int) -> None:
+    def __init__(self, hass: HomeAssistant, host: str, port: int) -> None:
         self._hass = hass
+        self._host = host
         self._port = port
         self._aio_zeroconf = None
         self._services: list[AsyncServiceInfo] = []
 
     async def async_start(self) -> None:
         """Register the virtual device's mDNS services."""
-        addresses = [
-            address
-            for address in await network.async_get_announce_addresses(self._hass)
-            if ip_address(address.split("%", 1)[0]).version == 4
-        ]
-        if not addresses:
-            raise RuntimeError("Virtual Shelly requires an IPv4 address for discovery")
+        if self._host == ALL_ADDRESSES:
+            addresses = [
+                address
+                for address in await network.async_get_announce_addresses(self._hass)
+                if ip_address(address.split("%", 1)[0]).version == 4
+            ]
+            if not addresses:
+                raise RuntimeError(
+                    "Virtual Shelly requires an IPv4 address for discovery"
+                )
+        else:
+            addresses = [self._host]
         properties = {
             "gen": "2",
             "id": DEVICE_ID,

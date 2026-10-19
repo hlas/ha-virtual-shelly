@@ -1,7 +1,8 @@
 """Constants for Virtual Shelly."""
 
 DOMAIN = "virtual_shelly"
-VERSION = "0.2.4"
+VERSION = "0.3.0"
+CONF_HOST = "host"
 CONF_NAME = "name"
 CONF_PORT = "port"
 CONF_POWER_ENTITIES = "power_entities"
@@ -14,4 +15,5 @@ DEVICE_ID = "shellypro4pm-020000000001"
 DEVICE_MAC = "020000000001"
 DEVICE_MODEL = "Shelly Pro 4PM"
 DEVICE_MODEL_ID = "SPSW-004PE16EU"
+ALL_ADDRESSES = "0.0.0.0"
 MDNS_SERVICE_TYPES = ("_shelly._tcp.local.", "_http._tcp.local.")
