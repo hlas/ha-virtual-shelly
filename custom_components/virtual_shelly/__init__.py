@@ -15,6 +15,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 
 from .const import (
+    ALL_ADDRESSES,
     CHANNEL_COUNT,
     CONF_ENABLE_DIAGNOSTICS,
     CONF_ENERGY_ENTITIES,
@@ -29,7 +30,6 @@ from .const import (
     LEGACY_MAC,
 )
 from .device import VirtualShellyPro4PM
-from .helpers import async_get_default_host
 from .mdns import ShellyMdnsAdvertiser
 from .server import ShellyRpcServer
 
@@ -143,9 +143,7 @@ async def async_setup_entry(
         unit = state.attributes.get("unit_of_measurement")
         return round(value * multipliers.get(unit, 1.0), 3)
 
-    host = settings.get(CONF_HOST) or await async_get_default_host(hass)
-    if host is None:
-        raise ConfigEntryNotReady("No IPv4 address available for Virtual Shelly")
+    host = settings.get(CONF_HOST, ALL_ADDRESSES)
 
     device = VirtualShellyPro4PM(
         settings[CONF_NAME], entry.data[CONF_MAC], _read_power, _read_energy
@@ -186,7 +184,11 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if entry.version == 1 and entry.minor_version < 2:
         hass.config_entries.async_update_entry(
             entry,
-            data={**entry.data, CONF_MAC: entry.data.get(CONF_MAC, LEGACY_MAC)},
+            data={
+                **entry.data,
+                CONF_HOST: entry.data.get(CONF_HOST, ALL_ADDRESSES),
+                CONF_MAC: entry.data.get(CONF_MAC, LEGACY_MAC),
+            },
             minor_version=2,
         )
     return True

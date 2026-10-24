@@ -26,7 +26,7 @@ from .const import (
     LEGACY_MAC,
 )
 from .device import device_id_for_mac, next_mac
-from .helpers import async_get_default_host, async_get_ipv4_addresses
+from .helpers import async_get_ipv4_addresses
 
 UI_DEFAULT_PORT = 80
 
@@ -120,9 +120,7 @@ async def _async_used_endpoints(
         if entry.entry_id == exclude_entry_id:
             continue
         settings = {**entry.data, **entry.options}
-        host = settings.get(CONF_HOST) or await async_get_default_host(hass)
-        if host is None:
-            continue
+        host = settings.get(CONF_HOST, ALL_ADDRESSES)
         endpoints.append((host, settings[CONF_PORT]))
     return endpoints
 
@@ -170,8 +168,7 @@ def _settings_from_import(data: dict[str, Any]) -> dict[str, Any]:
             for channel, entity_id in data.get(CONF_ENERGY_ENTITIES, {}).items()
         },
     }
-    if CONF_HOST in data:
-        settings[CONF_HOST] = data[CONF_HOST]
+    settings[CONF_HOST] = data.get(CONF_HOST, ALL_ADDRESSES)
     settings[CONF_MAC] = data.get(CONF_MAC, LEGACY_MAC)
     return settings
 

@@ -35,6 +35,8 @@ Add another **Virtual Shelly** entry under **Settings → Devices & services →
 
 Version 0.2.0 imports an existing `virtual_shelly:` YAML block into a UI config entry when Home Assistant starts. After the entry appears under **Settings → Devices & services**, remove the entire `virtual_shelly:` block from `configuration.yaml` and restart once more. The imported name, port, and power sensor mappings are preserved.
 
+Entries upgraded from versions that did not have a listen-address setting continue listening on `0.0.0.0` so existing pairings remain reachable on every previous IPv4 address. Before adding another device on the same port, configure the upgraded entry to listen on one specific IPv4 address.
+
 ## Try the virtual device
 
 The four Home Assistant entities are named `switch.virtual_shelly_pro_4pm_channel_1` through `channel_4`. State is shared with the Shelly-compatible API:
